@@ -27,3 +27,5 @@ class DataProcessor:
 
             # Commit the transaction
             conn.commit()
+        except mysql.connector.Error as e:
+            print("Error connecting to MySQL:", e)

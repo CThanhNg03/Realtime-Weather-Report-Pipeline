@@ -1,5 +1,5 @@
 from kafka import KafkaConsumer
-import json
+import json 
 
 bootstrap_server = ""
 topic = "weather"
