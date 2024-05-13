@@ -1,10 +1,14 @@
+import mysql.connector
+
 class DataProcessor:
     def __init__(self):
         pass
 
     def load_data_to_sqldb(self, conn, data):
         try: 
+            conn.reconnect()
             cursor = conn.cursor()
+            cursor.execute("USE weather_data;")
             
             # Extract relevant fields from JSON and insert into 'current' table
             insert_query = """
@@ -23,9 +27,10 @@ class DataProcessor:
                     %(sunshine_duration)s
                 )
             """
-            cursor.execute(insert_query, data)
+            cursor.execute(insert_query, data['current'])
 
             # Commit the transaction
             conn.commit()
+            cursor.close()
         except mysql.connector.Error as e:
-            print("Error connecting to MySQL:", e)
+            print("Error while inserting:", e)

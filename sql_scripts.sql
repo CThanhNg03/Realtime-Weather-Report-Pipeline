@@ -2,11 +2,11 @@
 CREATE DATABASE IF NOT EXISTS weather_data;
 
 -- Use the weather database
-USE weather;
+USE weather_data;
 
 -- Create the locations table
 CREATE TABLE IF NOT EXISTS locations (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id INT PRIMARY KEY,
     Name VARCHAR(255),
     Latitude DECIMAL(10, 8),
     Longitude DECIMAL(11, 8),

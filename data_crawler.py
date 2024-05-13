@@ -40,7 +40,7 @@ class DataCrawler:
             # Process the response data here
             return data
         else:
-            print("Error:", response.status_code)
+            print("Error while crawl:", response.status_code)
             return None
 
 # # Example usage:

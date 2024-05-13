@@ -1,4 +1,5 @@
 import mysql.connector
+import csv
 
 class DatabaseConnector:
     def __init__(self):
@@ -25,37 +26,48 @@ class DatabaseConnector:
     def connect_to_postgresql(self):
         pass
 
-    def create_sql_db(self, conn):
+    def create_database_schema(self, conn):
         try:
             cursor = conn.cursor()
 
             # Read the SQL script to create the database
             with open("sql_scripts.sql", "r") as file:
                 sql_script = file.read()
-            
-            cursor.execute(sql_script)
 
-            # Check for warnings
-            for warning in cursor.fetchwarnings():
-                print("Warning:", warning[2])
-                return
-            
+            cursor.execute(sql_script)
+            cursor.close()
+            print("Create database schema successfully!")
+
+        except mysql.connector.Error as e:
+            print("Error creating database schema:", str(e))
+            conn.close()
+
+
+    def insert_location_data(self, conn):
+        try:
+            conn.reconnect()
+            cursor = conn.cursor()
+            cursor.execute("USE weather_data;")
+
             # Load location data into db if not exist
-            with open(csv_file, "r") as file:
-                    next(file)  # Skip header row
-                    csv_data = [line.strip().split(",") for line in file]
+            with open("geolocation.csv", "r", encoding="utf-8") as file:
+                csv_reader = csv.reader(file)
+                next(csv_reader)  # Skip header row
+                csv_data = [(row[0], float(row[1]), float(row[2]), row[3], int(row[4])) for row in csv_reader]
             insert_query = """
-                INSERT INTO locations (Name, Latitude, Longitude, Address)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO locations (Name, Latitude, Longitude, Address, id)
+                VALUES (%s, %s, %s, %s, %s)
             """
             cursor.executemany(insert_query, csv_data)
 
             # Commit the transaction
             conn.commit()
             cursor.close()
+            print("Insert locations successfully!")
 
         except mysql.connector.Error as e:
-            print("Error:", e)
+            print("Error inserting location data:", str(e))
+
 
 
 # db_connector = Db_connector()

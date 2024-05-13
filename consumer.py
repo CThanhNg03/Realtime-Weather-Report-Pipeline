@@ -1,14 +1,14 @@
 from kafka import KafkaConsumer
 import json 
 
-bootstrap_server = ""
+bootstrap_server = "localhost:9092"
 topic = "weather"
 
 def consum():
     consumer = KafkaConsumer(
         topic,
-        group_id='my_consumer_group',
-        bootstrap_servers=bootstrap_servers,
+        group_id='test-consumer-group',
+        bootstrap_servers=bootstrap_server,
         value_deserializer=lambda x: x.decode('utf-8')
     )
 
