@@ -2,11 +2,10 @@ from kafka import KafkaProducer
 import json
 
 bootstrap_servers = 'localhost:9092'
-topic = 'weather'
 
 producer = KafkaProducer(bootstrap_servers=bootstrap_servers)
 
-def send_data(data):
+def send_data(data, topic="weather"):
     try:
 # Serialize the data to JSON
         serialized_data = json.dumps(data)

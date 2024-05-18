@@ -1,12 +1,9 @@
--- Create the weather database
-CREATE DATABASE IF NOT EXISTS weather_data;
-
--- Use the weather database
-USE weather_data;
+-- Connect to the database (This should be done outside the script)
+-- \c weather_data;
 
 -- Create the locations table
 CREATE TABLE IF NOT EXISTS locations (
-    id INT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     Name VARCHAR(255),
     Latitude DECIMAL(10, 8),
     Longitude DECIMAL(11, 8),
@@ -16,7 +13,7 @@ CREATE TABLE IF NOT EXISTS locations (
 -- Create the current weather table
 CREATE TABLE IF NOT EXISTS current (
     locationID INT,
-    time DATETIME,
+    time TIMESTAMP,
     temperature_2m DECIMAL(5,2),
     relative_humidity_2m DECIMAL(5,2),
     dew_point_2m DECIMAL(5,2),
@@ -37,4 +34,17 @@ CREATE TABLE IF NOT EXISTS current (
     is_day INT,
     sunshine_duration INT,
     PRIMARY KEY (locationID, time)
+);
+
+-- Create the daily forecast weather data table
+CREATE TABLE IF NOT EXISTS daily (
+    id SERIAL PRIMARY KEY,
+    temperature_2m_max DECIMAL(5, 2),
+    temperature_2m_min DECIMAL(5, 2),
+    apparent_temperature_max DECIMAL(5, 2),
+    apparent_temperature_min DECIMAL(5, 2),
+    sunrise TIME,
+    sunset TIME,
+    time TIMESTAMP,
+    time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

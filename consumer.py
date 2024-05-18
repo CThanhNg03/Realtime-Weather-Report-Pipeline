@@ -2,9 +2,8 @@ from kafka import KafkaConsumer
 import json 
 
 bootstrap_server = "localhost:9092"
-topic = "weather"
 
-def consum():
+def consum(topic):
     consumer = KafkaConsumer(
         topic,
         group_id='test-consumer-group',

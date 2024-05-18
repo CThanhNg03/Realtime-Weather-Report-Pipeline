@@ -11,59 +11,81 @@ class WeatherPipeline:
         self.data_crawler = DataCrawler()
         self.db_connector = DatabaseConnector()
         self.data_processor = DataProcessor()
+        self.spark_processor = SparkProcessor()
     
-    def producer_thread(self):
+    def producer_thread(self, db=1):
         try:
             while True:
-                for batch in self.data_crawler.fetch_data_in_batches():
-                    send_data(batch)
+                for batch in self.data_crawler.fetch_data_in_batches(db=db):
+                    send_data(batch, topic="weather_1" if db == 1 else "weather_2")
                     time.sleep(5)
                 print("Data sent successfully")
                 time.sleep(15 * 60)  # Sleep for 15 minutes
         except KeyboardInterrupt:
             print("Producer terminated.")
         except Exception as e:
-            print(f'Error in producer: {str(e)}')
+            print(f'Error in producer in topic {db}: {str(e)}')
     
-    def consumer_thread(self):
+    def consumer_thread(self, db=1):
         try:
-            # Connect to MySQL database
-            mysql_conn = self.db_connector.connect_to_mysql()
-            if mysql_conn:
-                # Create database schema
-                self.db_connector.create_database_schema(mysql_conn)
-                # Insert location data
-                self.db_connector.insert_location_data(mysql_conn)
-            else:
-                print("Failed to connect to MySQL database.")
+            if db == 1:
+                mysql_conn = self.db_connector.connect_to_mysql()
 
-            while True:
-                for data in consum():
-                    self.data_processor.load_data_to_sqldb(mysql_conn, data)  
-                print("Load data successfully")
+                if mysql_conn:
+                    self.db_connector.create_database_schema(mysql_conn)
+                    self.db_connector.insert_location_data(mysql_conn)
+                else:
+                    print("Failed to connect to MySQL database.")
+
+                while True:
+                    for current, forecast in self.spark_processor.process_data(consum("weather_1")):
+                        self.spark_processor.send_mysql(mysql_conn, current, table_name = "current")
+                        self.spark_processor.send_mysql(mysql_conn, forecast, table_name = "daily")
+                    print("Load data successfully")
+
+            elif db == 2:
+                postgresql_conn = self.db_connector.connect_to_postgresql()
+
+                if postgresql_conn:
+                    self.db_connector.create_database_schema(postgresql_conn, db="postgresql")
+                    self.db_connector.insert_location_data(postgresql_conn, db="postgresql")
+                else:
+                    print("Failed to connect to PostgreSQL database.")
+                while True:
+                    for current, forecast in self.spark_processor.process_data(consum("weather_2")):
+                        self.spark_processor.send_postgresql(postgresql_conn, current, table_name = "current")
+                        self.spark_processor.send_postgresql(postgresql_conn, forecast, table_name = "daily")
+                    print("Load data successfully")
 
         except KeyboardInterrupt:
             print("Consumer terminated.")
         except Exception as e:
-            print(f'Error in consumer thread: {str(e)}')
+            print(f'Error in consumer thread {db}: {str(e)}')
 
     def run(self):
         # Create separate threads for producer and consumer
-        producer_thread = threading.Thread(target=self.producer_thread)
-        consumer_thread = threading.Thread(target=self.consumer_thread)
+        producer_thread_1 = threading.Thread(target=self.producer_thread, args=(1,))
+        consumer_thread_1 = threading.Thread(target=self.consumer_thread, args=(1,))
+        producer_thread_2 = threading.Thread(target=self.producer_thread, args=(2,))
+        consumer_thread_2 = threading.Thread(target=self.consumer_thread, args=(2,))
 
         try:
             # Start the threads
-            producer_thread.start()
-            consumer_thread.start()
+            producer_thread_1.start()
+            producer_thread_2.start()
+            consumer_thread_1.start()
+            consumer_thread_2.start()
 
             # Wait for the consumer thread to finish (producer thread runs indefinitely)
-            consumer_thread.join()
+            consumer_thread_1.join()
+            consumer_thread_2.join()
         except KeyboardInterrupt:
             print("Weather Pipeline terminated by user.")
         finally:
-            # Stop the producer thread gracefully
-            producer_thread.join()
+            # Stop the producer threads gracefully
+            producer_thread_1.join()
+            producer_thread_2.join()
+
 
 pipeline = WeatherPipeline()
 pipeline.run()
