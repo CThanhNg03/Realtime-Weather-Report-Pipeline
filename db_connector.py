@@ -30,9 +30,10 @@ class DatabaseConnector:
                 host="34.143.211.214",
                 user="postgres",
                 password="123456a@",
-                ssl_disabled=False
+                sslmode="require",
+                dbname="weather_data"
             )
-            if conn.is_connected():
+            with conn:
                 print("Connected to PostgreSQL database")
                 return conn
         except psycopg2.Error as e:

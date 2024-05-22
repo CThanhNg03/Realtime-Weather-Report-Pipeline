@@ -10,7 +10,7 @@ class DataCrawler:
         self.df1 = self.df.iloc[:len(self.df)//2]
         self.df2 = self.df.iloc[len(self.df)//2:]
 
-    def fetch_data_in_batches(self, db=1, batch_size=10, data_type="casual"):
+    def fetch_data_in_batches(self, db=1, batch_size=30, data_type="casual"):
         if db == 1:
             df = self.df1
         elif db == 2:
@@ -37,7 +37,7 @@ class DataCrawler:
             'latitude': latitudes,
             'longitude': longitudes,
             "current": ["temperature_2m", "relative_humidity_2m", "dew_point_2m", "apparent_temperature", "precipitation_probability", "precipitation", "rain", "showers", "snowfall", "snow_depth", "pressure_msl", "surface_pressure", "cloud_cover", "cloud_cover_low", "cloud_cover_mid", "cloud_cover_high", "visibility", "evapotranspiration", "et0_fao_evapotranspiration", "vapour_pressure_deficit", "wind_speed_10m", "wind_speed_80m", "wind_speed_120m", "wind_speed_180m", "wind_direction_10m", "wind_direction_80m", "wind_direction_120m", "wind_direction_180m", "wind_gusts_10m", "temperature_80m", "temperature_120m", "temperature_180m", "soil_temperature_0cm", "soil_temperature_6cm", "soil_temperature_18cm", "soil_temperature_54cm", "soil_moisture_0_to_1cm", "soil_moisture_1_to_3cm", "soil_moisture_3_to_9cm", "soil_moisture_9_to_27cm", "soil_moisture_27_to_81cm", "uv_index", "uv_index_clear_sky", "is_day", "sunshine_duration"],
-            "daily"=["temperature_2m_max","temperature_2m_min","apparent_temperature_max","apparent_temperature_min","sunrise","sunset"]
+            "daily":["temperature_2m_max","temperature_2m_min","apparent_temperature_max","apparent_temperature_min","sunrise","sunset"],
             "timezone": "Asia/Bangkok",
         }
         if data_type == "casual":

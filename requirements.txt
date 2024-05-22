@@ -1,5 +1,8 @@
 mysql-connector-python==8.4.0
-pandas==2.2.1
+pandas==2.0.3
 requests==2.31.0
 chardet==5.2.0
 kafka-python==2.0.0
+psycopg2-binary==2.9.9
+pyspark==3.5.0
+findspark==2.0.1

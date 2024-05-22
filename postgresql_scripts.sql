@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS locations (
 -- Create the current weather table
 CREATE TABLE IF NOT EXISTS current (
     locationID INT,
-    time TIMESTAMP,
+    time DATETIME,
     temperature_2m DECIMAL(5,2),
     relative_humidity_2m DECIMAL(5,2),
     dew_point_2m DECIMAL(5,2),
@@ -45,6 +45,6 @@ CREATE TABLE IF NOT EXISTS daily (
     apparent_temperature_min DECIMAL(5, 2),
     sunrise TIME,
     sunset TIME,
-    time TIMESTAMP,
+    time DATETIME,
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
