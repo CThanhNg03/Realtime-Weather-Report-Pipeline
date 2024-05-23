@@ -6,7 +6,7 @@ from datetime import datetime
 class SparkProcessor:
     def __init__(self):
         self.spark = SparkSession.builder.appName("WeatherProcessor") \
-        .master("local[*]") \
+        .master("spark://10.10.28.50:7077") \
         .config("spark.jars", "mysql-connector-java-8.0.30.jar") \
         .getOrCreate()
     
@@ -17,15 +17,14 @@ class SparkProcessor:
             .option("group.id", "test-consumer-group") \
             .option("value.deserializer", lambda x: x.decode('utf-8')) \
             .load()
-        
+        # data.writeStream.format("console").start()
         return data
 
     def process_data(self, data):
         parsed_data = data.selectExpr("CAST(value AS STRING)").select(from_json(col("value"), "map<string, string>").alias("parsed_value"))
-
+        if parsed_data.select("parsed_value").rdd.isEmpty():
+            yield None, None  # Handle empty data
         exploded_data = parsed_data.select(explode("parsed_value").alias("id", "data"))
-        if exploded_data.count() == 0:
-            return  # Handle empty data
 
         location_row = exploded_data.filter(exploded_data["id"] == "id").collect()
         if not location_row:

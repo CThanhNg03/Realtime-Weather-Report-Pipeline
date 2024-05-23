@@ -1,6 +1,8 @@
 import pandas as pd
 import requests
 import json
+import pandas as pd
+import time
 
 class DataCrawler:
     def __init__(self):
@@ -16,12 +18,12 @@ class DataCrawler:
         elif db == 2:
             df = self.df2
         total_places = len(df)
+        first = df["id"].sort_values().iloc[0]
 
-        for start in range(0, total_places, batch_size):
-            end = min(start + batch_size, total_places)
+        for start in range(first, total_places, batch_size):
+            end = min(start + batch_size, first + total_places)
             longitudes, latitudes = self.get_long_lat(start, end)
             crawled = self.get_data(longitudes, latitudes, data_type)
-
             # Add index to row
             for id, row in enumerate(crawled, start=start):
                 row['id'] = id
@@ -47,7 +49,8 @@ class DataCrawler:
             data = json.loads(response.text)
             return data
         else:
-            print("Error while crawl:", response.status_code)
+            log_message = f"{time.strftime('%Y-%m-%d %H:%M:%S')} - ERROR - Crawler: Error with response {str(response.status_code)}"
+            print(log_message)
             return None
 
 # # Example usage:

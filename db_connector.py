@@ -1,6 +1,7 @@
 import mysql.connector
 import csv
 import psycopg2
+import time
 
 class DatabaseConnector:
     def __init__(self):
@@ -15,10 +16,12 @@ class DatabaseConnector:
                 ssl_disabled=False
             )
             if conn.is_connected():
-                print("Connected to MySQL database")
+                log_message = f"{time.strftime('%Y-%m-%d %H:%M:%S')} - INFO - Connected to MySQL database"
+                print(log_message)
                 return conn
         except mysql.connector.Error as e:
-            print("Error connecting to MySQL:", e)
+            log_message = f"{time.strftime('%Y-%m-%d %H:%M:%S')} - ERROR - Error connecting to MySQL: {str(e)}"
+            print(log_message)
             return None
     
     def connect_to_sqlserver(self):
@@ -34,10 +37,12 @@ class DatabaseConnector:
                 dbname="weather_data"
             )
             with conn:
-                print("Connected to PostgreSQL database")
+                log_message = f"{time.strftime('%Y-%m-%d %H:%M:%S')} - INFO - Connected to PostgreSQL database"
+                print(log_message)
                 return conn
         except psycopg2.Error as e:
-            print("Error connecting to PostgreSQL:", e)
+            log_message = f"{time.strftime('%Y-%m-%d %H:%M:%S')} - ERROR - Error connecting to PostgreSQL: {str(e)}"
+            print(log_message)
             return None
         pass
 
@@ -54,13 +59,16 @@ class DatabaseConnector:
 
             cursor.execute(sql_script)
             cursor.close()
-            print("Create database schema successfully!")
+            log_message = f"{time.strftime('%Y-%m-%d %H:%M:%S')} - INFO - Created database schema successfully!"
+            print(log_message)
 
         except mysql.connector.Error as e:
-            print("Error creating database schema in mysql:", str(e))
+            log_message = f"{time.strftime('%Y-%m-%d %H:%M:%S')} - ERROR - Error creating database schema in MySQL: {str(e)}"
+            print(log_message)
             conn.close()
         except psycopg2.Error as e:
-            print("Error creating database schema in postgresql:", str(e))
+            log_message = f"{time.strftime('%Y-%m-%d %H:%M:%S')} - ERROR - Error creating database schema in PostgreSQL: {str(e)}"
+            print(log_message)
             conn.close()
 
 
@@ -95,12 +103,13 @@ class DatabaseConnector:
             # Commit the transaction
             conn.commit()
             cursor.close()
-            print("Insert locations successfully!")
+            log_message = f"{time.strftime('%Y-%m-%d %H:%M:%S')} - INFO - Insert locations successfully!"
+            print(log_message)
 
         except mysql.connector.Error as e:
-            print("Error inserting location data in mysql:", str(e))
+            print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - ERROR - Error inserting location data in mysql:", str(e))
         except psycopg2.Error as e:
-            print("Error inserting location data in postgresql:", str(e))
+            print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - ERROR - Error inserting location data in postgresql:", str(e))
 
 
 
