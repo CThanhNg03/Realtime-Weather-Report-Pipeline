@@ -4,12 +4,10 @@ import time
 from data_crawler import DataCrawler
 from db_connector import DatabaseConnector
 from producer import send_data
-from consumer import consum
 from spark_processor import SparkProcessor
 import os
 
 findspark.init()
-# from data_processor import DataProcessor
 os.environ['PYSPARK_SUBMIT_ARGS'] = '--packages org.apache.spark:spark-streaming-kafka-0-10_2.12:3.5.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 pyspark-shell'
 
 class WeatherPipeline:

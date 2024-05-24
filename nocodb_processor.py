@@ -6,6 +6,7 @@ from pyspark.sql.types import StructType, StructField, IntegerType, TimestampTyp
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.feature import VectorAssembler
 from geopy.geocoders import Nominatim
+from pyspark.ml.stat import Correlation
 
 def executeRestApi(verb, url, body, page):
     res = None
@@ -218,7 +219,52 @@ class NocoProcessor:
 
     def process_current(self):
         current = self.fetch_api("current").union(self.fetch_api("current_2"))
-        location = self.fetch_api("location")
+        location = self.fetch_api("location").withColumnRenamed("id", "locationID")
+        current = current.merge(location, on="locationID", how="inner")
+
+        features = ["temperature_2m", "relative_humidity_2m", "dew_point_2m", "apparent_temperature", "precipitation_probability", "precipitation", "rain", "showers", "snowfall", "snow_depth", "cloud_cover", "visibility", "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m", "uv_index", "uv_index_clear_sky", "is_day", "sunshine_duration"]
+        assembler = VectorAssembler(inputCols=features, outputCol="features")
+        current = assembler.transform(current)
+        kmeans = KMeans().setK(70).setSeed(1)
+        model = kmeans.fit(daily)
+        clustered = model.transform(daily)
+
+        cluster_summary = clustered.groupBy("time", "prediction").agg(
+            avg("temperature_2m").alias("avg_temperature_2m"),
+            avg("relative_humidity_2m").alias("avg_relative_humidity_2m"),
+            avg("dew_point_2m").alias("avg_dew_point_2m"),
+            avg("apparent_temperature").alias("avg_apparent_temperature"),
+            avg("precipitation_probability").alias("avg_precipitation_probability"),
+            avg("precipitation").alias("avg_precipitation"),
+            avg("rain").alias("avg_rain"),
+            avg("showers").alias("avg_showers"),
+            avg("snowfall").alias("avg_snowfall"),
+            avg("snow_depth").alias("avg_snow_depth"),
+            avg("cloud_cover").alias("avg_cloud_cover"),
+            avg("visibility").alias("avg_visibility"),
+            avg("wind_speed_10m").alias("avg_wind_speed_10m"),
+            avg("wind_direction_10m").alias("avg_wind_direction_10m"),
+            avg("wind_gusts_10m").alias("avg_wind_gusts_10m"),
+            avg("uv_index").alias("avg_uv_index"),
+            avg("uv_index_clear_sky").alias("avg_uv_index_clear_sky"),
+            avg("is_day").alias("avg_is_day"),
+            avg("sunshine_duration").alias("avg_sunshine_duration"),
+            avg("longitude").alias("centroid_longitude"),
+            avg("latitude").alias("centroid_latitude")
+        )
+
+        cluster_summary = cluster_summary.withColumn("centroid_address", get_address(col("centroid_latitude"), col("centroid_longitude")))
+
+        features = ["avg_temperature_2m", "avg_relative_humidity_2m", "avg_dew_point_2m", "avg_apparent_temperature", "avg_precipitation_probability", "avg_precipitation", "avg_rain", "avg_showers", "avg_snowfall", "avg_snow_depth", "avg_cloud_cover", "avg_visibility", "avg_wind_speed_10m", "avg_wind_direction_10m", "avg_wind_gusts_10m", "avg_uv_index", "avg_uv_index_clear_sky", "avg_is_day", "avg_sunshine_duration"]
+        assembler = VectorAssembler(inputCols=features, outputCol="features")
+        cluster_summary = assembler.transform(cluster_summary)
+
+        cluster_summary.withColumn("corr_matrix", Correlation.corr("features", "features"))
+
+        corr_df = cluster_summary.select(
+            "time", "locationID",
+            expr("explode(matrix_to_rows(corr_matrix)) as (matrix_x, matrix_y, correlation)")
+            )
         
         pass
 
