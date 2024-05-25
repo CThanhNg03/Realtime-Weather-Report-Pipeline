@@ -28,7 +28,13 @@ docker run -d --name nocodb-postgres \
 -e PORT=8085 \
 -e NUXT_PUBLIC_NC_BACKEND_URL="http://127.0.0.1:8085" nocodb/nocodb:latest
 ```
-
 ```bash
 ssh -L 8085:127.0.0.1:8085 dis@112.137.129.246 -p 2050
 ```
+
+```bash
+ssh -L 8088:127.0.0.1:8088 dis@112.137.129.246 -p 2050
+```
+
+
+

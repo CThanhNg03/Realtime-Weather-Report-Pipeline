@@ -1,13 +1,20 @@
-from pyspark.sql import SparkSession, Row
-from pyspark.sql.functions import udf, col, explode, max, avg, collect_list
+from pyspark.sql import SparkSession, Row, Window
+from pyspark.sql.functions import udf, col, explode, max, avg, collect_list, row_number, desc, expr, struct, corr, lit
 import requests
 import json
 from pyspark.sql.types import StructType, StructField, IntegerType, TimestampType, DecimalType, ArrayType, StringType, FloatType, BooleanType
-from pyspark.ml.clustering import KMeans
-from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.clustering import KMeans 
+from pyspark.ml.feature import VectorAssembler 
+import pyspark.pandas as ps
 from geopy.geocoders import Nominatim
 from pyspark.ml.stat import Correlation
+import os
+import findspark
+import time
+findspark.init()
+# os.environ['PYSPARK_SUBMIT_ARGS'] = '--packages pyspark-shell'
 
+# Function to execute REST API
 def executeRestApi(verb, url, body, page):
     res = None
     token = "drKI1RM_aluVex4hzQci03vDyoQMM_5Xm7uC4XFb"
@@ -27,6 +34,7 @@ def executeRestApi(verb, url, body, page):
         return {'list': json.loads(res.text)["list"]}
     return None
 
+# Get count of records
 def getCount(url):
     token = "drKI1RM_aluVex4hzQci03vDyoQMM_5Xm7uC4XFb"
     headers = {
@@ -36,22 +44,28 @@ def getCount(url):
     res = requests.get(f"{url}/count", headers=headers)
     return json.loads(res.text)["count"]
 
-geolocator = Nominatim(user_agent="myGeocoder")
 
-def get_address(latitude, longitude):
+# Get address from Latitude and Longitude
+@udf
+def get_address(Latitude, Longitude):
+    geolocator = Nominatim(user_agent="cthanhnguyen03@gmail.com", timeout=10)
     try:
-        location = geolocator.reverse((latitude, longitude))
+        location = geolocator.reverse(f"{round(Latitude, 1)}, {round(Longitude,1)}")
         if location:
             address = location.address
             parts = address.split(",")
             result = ", ".join(parts[-2:-1]).strip()
+            time.sleep(2)
             return result
     except Exception as e:
+        print(e)
         return None
     return None
 
+# Get geojson from row
+@udf()
 def get_geojson(row):
-    coordinates = list(zip(row["longitudes"], row["latitudes"]))
+    coordinates = list(zip(row["Longitudes"], row["Latitudes"]))
     coordinates = [list(item) for item in coordinates]
     properties = {
         "name": row["centroid_address"],
@@ -64,18 +78,30 @@ def get_geojson(row):
         "type": "Feature",
         "geometry": {
             "type": "Polygon",
-            "coordinates": coordinates
+            "coordinates": [coordinates]
         },
         "properties": properties
     }
 
-    return feature
+    return json.dumps(feature)
+
+# Convert matrix to rows
+def matrix_to_rows(matrix, features):
+    rows = []
+    for i, row in enumerate(matrix):
+        for j, value in enumerate(row):
+            rows.append(Row(matrix_x=features[i], matrix_y=features[j], correlation=float(value)))
+    return rows
+
 
 class NocoProcessor: 
     def __init__(self):
         self.spark = SparkSession.builder.appName("NocoProcessor") \
-                    .master("spark://10.10.28.50:7077") \
+                    .master("local[*]") \
+                    .config("spark.jars", "postgresql-42.7.3.jar") \
                     .getOrCreate()
+
+        # Schema for API data
         self.current = StructType([
             StructField("locationID", StringType()),
             StructField("time", StringType()),
@@ -113,10 +139,10 @@ class NocoProcessor:
         ])
         self.location = StructType([
             StructField("id", IntegerType()),
-            StructField("name", StringType()),
-            StructField("latitude", StringType()),
-            StructField("longitude", StringType()),
-            StructField("address", StringType())
+            StructField("Name", StringType()),
+            StructField("Latitude", StringType()),
+            StructField("Longitude", StringType()),
+            StructField("Address", StringType())
         ])
         self.url = "http://localhost:8085/api/v2/tables/"
         self.token = "drKI1RM_aluVex4hzQci03vDyoQMM_5Xm7uC4XFb"
@@ -124,9 +150,10 @@ class NocoProcessor:
         self.current_2 = "m640s5ii47qu71s"
         self.daily_1 = "mkzhlrxen89llxt"
         self.daily_2 = "mkn391r4ydjttwv"
-        self.location_1 = ""
+        self.location_1 = "m3k20e0l0kawtxr"
         pass
 
+    # Fetch data from API
     def fetch_api(self, table_name):
         switcher = {
             "current": [self.current_1, self.current],
@@ -180,22 +207,28 @@ class NocoProcessor:
                     .withColumn("time_created", col("time_created").cast(TimestampType())) \
                     .withColumn("time", col("time").cast(TimestampType()))
         else: 
-            df = df.withColumn("latitude", col("latitude").cast(FloatType())) \
-                    .withColumn("longitude", col("longitude").cast(FloatType()))
+            df = df.withColumn("Latitude", col("Latitude").cast(FloatType())) \
+                    .withColumn("Longitude", col("Longitude").cast(FloatType()))
         return df
 
+    # Process daily data
     def process_daily(self):
         daily = self.fetch_api("daily").union(self.fetch_api("daily_2"))
-        daily = daily.groupBy("time", "locationID").agg(max("time_created").alias("newest_time_created"))
-        location = self.fetch_api("location")
-        location = location.withColumnRenamed("id", "locationID")
-        daily = daily.join(location, "locationID", "inner")
-        
-        features = ["longitude", "latitude", "temperature_2m_max", "temperature_2m_min", "apparent_temperature_max", "apparent_temperature_min"]
-        assembler = VectorAssembler(inputCols=features, outputCol="features")
-        daily = assembler.transform(daily)
+        window_spec = Window.partitionBy("time", "locationID").orderBy(desc("time_created"))
+        daily_with_row_num = daily.withColumn("row_num", row_number().over(window_spec))
+        latest_daily = daily_with_row_num.filter(col("row_num") == 1).drop("row_num")
+        location = self.fetch_api("location").withColumnRenamed("id", "locationID")
+        latest_daily_with_location = latest_daily.join(location, "locationID", "inner")
 
-        kmeans = KMeans().setK(70).setSeed(1)
+        features = ["Longitude", "Latitude", "temperature_2m_max", "temperature_2m_min", "apparent_temperature_max", "apparent_temperature_min"]
+        for feature in features:
+            if feature not in latest_daily_with_location.columns:
+                print(f"Warning: {feature} does not exist in the DataFrame.")
+
+        assembler = VectorAssembler(inputCols=features, outputCol="features")
+        daily = assembler.transform(latest_daily_with_location)
+
+        kmeans = KMeans().setK(10).setSeed(1)
         model = kmeans.fit(daily)
         clustered = model.transform(daily)
         
@@ -205,29 +238,36 @@ class NocoProcessor:
                 avg("temperature_2m_min").alias("temperature_2m_min"),
                 avg("apparent_temperature_max").alias("apparent_temperature_max"),
                 avg("apparent_temperature_min").alias("apparent_temperature_min"),
-                collect_list("longitude").alias("longitudes"),
-                collect_list("latitude").alias("latitudes"),
-                avg("longitude").alias("centroid_longitude"),
-                avg("latitude").alias("centroid_latitude")
+                collect_list("Longitude").alias("Longitudes"),
+                collect_list("Latitude").alias("Latitudes"),
+                avg("Longitude").alias("centroid_Longitude"),
+                avg("Latitude").alias("centroid_Latitude")
             )
 
-        cluster_summary = cluster_summary.withColumn("centroid_address", get_address(col("centroid_latitude"), col("centroid_longitude")))
+        location_df = clustered.groupBy("prediction").agg(
+            avg("Longitude").alias("centroid_Longitude"),
+            avg("Latitude").alias("centroid_Latitude")
+        )
+        location_df = location_df.withColumn("centroid_address", get_address(col("centroid_Latitude"), col("centroid_Longitude")))
+        cluster_summary = cluster_summary.join(location_df, "prediction", "inner")
 
-        geojson = cluster_summary.rdd.map(get_geojson)
-
+        geojson = cluster_summary.withColumn("geojson", get_geojson(struct("*"))).select("time", "geojson")
+        
         return geojson
 
+    # Process current data
     def process_current(self):
         current = self.fetch_api("current").union(self.fetch_api("current_2"))
         location = self.fetch_api("location").withColumnRenamed("id", "locationID")
-        current = current.merge(location, on="locationID", how="inner")
+        current = current.join(location, "locationID", "inner")
 
         features = ["temperature_2m", "relative_humidity_2m", "dew_point_2m", "apparent_temperature", "precipitation_probability", "precipitation", "rain", "showers", "snowfall", "snow_depth", "cloud_cover", "visibility", "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m", "uv_index", "uv_index_clear_sky", "is_day", "sunshine_duration"]
         assembler = VectorAssembler(inputCols=features, outputCol="features")
         current = assembler.transform(current)
-        kmeans = KMeans().setK(70).setSeed(1)
-        model = kmeans.fit(daily)
-        clustered = model.transform(daily)
+
+        kmeans = KMeans().setK(10).setSeed(1)
+        model = kmeans.fit(current)
+        clustered = model.transform(current)
 
         cluster_summary = clustered.groupBy("time", "prediction").agg(
             avg("temperature_2m").alias("avg_temperature_2m"),
@@ -247,27 +287,49 @@ class NocoProcessor:
             avg("wind_gusts_10m").alias("avg_wind_gusts_10m"),
             avg("uv_index").alias("avg_uv_index"),
             avg("uv_index_clear_sky").alias("avg_uv_index_clear_sky"),
-            avg("is_day").alias("avg_is_day"),
-            avg("sunshine_duration").alias("avg_sunshine_duration"),
-            avg("longitude").alias("centroid_longitude"),
-            avg("latitude").alias("centroid_latitude")
+            max("is_day").alias("avg_is_day"),
+            avg("sunshine_duration").alias("avg_sunshine_duration")
         )
 
-        cluster_summary = cluster_summary.withColumn("centroid_address", get_address(col("centroid_latitude"), col("centroid_longitude")))
+        location_df = clustered.groupBy("prediction").agg(
+            avg("Longitude").alias("centroid_Longitude"),
+            avg("Latitude").alias("centroid_Latitude")
+        )
+        location_df = location_df.withColumn("centroid_address", get_address(col("centroid_Latitude"), col("centroid_Longitude")))
+        cluster_summary = cluster_summary.join(location_df, "prediction", "inner")
 
         features = ["avg_temperature_2m", "avg_relative_humidity_2m", "avg_dew_point_2m", "avg_apparent_temperature", "avg_precipitation_probability", "avg_precipitation", "avg_rain", "avg_showers", "avg_snowfall", "avg_snow_depth", "avg_cloud_cover", "avg_visibility", "avg_wind_speed_10m", "avg_wind_direction_10m", "avg_wind_gusts_10m", "avg_uv_index", "avg_uv_index_clear_sky", "avg_is_day", "avg_sunshine_duration"]
         assembler = VectorAssembler(inputCols=features, outputCol="features")
-        cluster_summary = assembler.transform(cluster_summary)
+        corr_df = assembler.transform(cluster_summary)
 
-        cluster_summary.withColumn("corr_matrix", Correlation.corr("features", "features"))
+        corr_matrix = Correlation.corr(corr_df, "features", "spearman").collect()[0][0]
 
-        corr_df = cluster_summary.select(
-            "time", "locationID",
-            expr("explode(matrix_to_rows(corr_matrix)) as (matrix_x, matrix_y, correlation)")
-            )
-        
-        pass
+        corr_long_df = self.spark.createDataFrame(matrix_to_rows(corr_matrix.toArray(), features))
+
+        corr_long_df = corr_long_df.withColumn("time", lit(time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())))
+        # corr_long_df.show()
+        return corr_long_df, cluster_summary
+    
+    # Load data to database
+    def load_to_db(self, df, table_name):
+        df.write.format("jdbc").options(
+            url="jdbc:postgresql://34.143.211.214/superset",
+            driver="org.postgresql.Driver",
+            dbtable=table_name,
+            user="postgres",
+            password="123456a@"
+        ).mode("append").save()
+
+    # Run the processor
+    def run(self):
+        while True:
+            daily_geojson = self.process_daily()
+            current_corr, current_summary = self.process_current()
+            self.load_to_db(daily_geojson, "daily_geojson")
+            self.load_to_db(current_corr, "current_correlation")
+            self.load_to_db(current_summary, "current_summary")
+            print("Data loaded to database.")
+            time.sleep(60*15)
 
 test = NocoProcessor()
-df = test.fetch_api("daily")
-df.show()
+test.run()
